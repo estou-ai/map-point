@@ -1,0 +1,49 @@
+{
+    "name": "estouai/map-point",
+    "license": "proprietary",
+    "autoload": {
+        "psr-4": {
+            "Estouai\\MapPoint\\": "src"
+        }
+    },
+    "autoload-dev": {
+        "psr-4": {
+            "Estouai\\MapPoint\\Tests\\": "tests"
+        }
+    },
+    "require": {
+        "statamic/cms": "^6.0"
+    },
+    "require-dev": {
+        "orchestra/testbench": "^10.8",
+        "laravel/pint": "^1.32",
+        "pestphp/pest": "^4.7",
+        "pestphp/pest-plugin-laravel": "^4.1"
+    },
+    "scripts": {
+        "pint": "pint",
+        "lint": "pint --test",
+        "format": "@pint",
+        "pest": "pest",
+        "test": "@pest"
+    },
+    "config": {
+        "allow-plugins": {
+            "pixelfear/composer-dist-plugin": true,
+            "pestphp/pest-plugin": true
+        }
+    },
+    "extra": {
+        "statamic": {
+            "name": "Map Point",
+            "description": "Control panel fieldtype for capturing a geographic coordinate, with Google place search and Leaflet map picker modes"
+        },
+        "laravel": {
+            "providers": [
+                "Estouai\\MapPoint\\ServiceProvider"
+            ]
+        }
+    },
+    "minimum-stability": "dev",
+    "prefer-stable": true
+}
