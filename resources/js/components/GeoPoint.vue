@@ -246,7 +246,7 @@ function removeMarker() {
 
             <ul
                 v-if="results.length"
-                class="absolute z-10 mt-1 w-full max-h-64 overflow-auto rounded-md border bg-white shadow-lg dark:bg-gray-800"
+                class="map-point-results absolute mt-1 w-full max-h-64 overflow-auto rounded-md border bg-white shadow-lg dark:bg-gray-800"
             >
                 <li v-for="(result, index) in results" :key="result.place_id ?? index">
                     <button
@@ -293,5 +293,11 @@ function removeMarker() {
 <style scoped>
 .map-point-map {
     height: 20rem;
+}
+
+/* Leaflet gives its panes z-index up to 1000 and its controls 800+, so the
+   results dropdown has to clear that or it renders behind the map. */
+.map-point-results {
+    z-index: 1200;
 }
 </style>

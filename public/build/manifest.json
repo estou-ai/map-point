@@ -20,12 +20,12 @@
     "src": "node_modules/leaflet/dist/images/marker-shadow.png"
   },
   "resources/js/cp.js": {
-    "file": "assets/cp-BhlYNNBX.js",
+    "file": "assets/cp-CqJmg6xn.js",
     "name": "cp",
     "src": "resources/js/cp.js",
     "isEntry": true,
     "css": [
-      "assets/cp-Cg0HbMO4.css"
+      "assets/cp-DX61-mzJ.css"
     ],
     "assets": [
       "assets/marker-icon-hN30_KVU.png",
