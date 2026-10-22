@@ -39,11 +39,13 @@ class GooglePlacesTest extends TestCase
         return [['REQUEST_DENIED'], ['OVER_QUERY_LIMIT'], ['INVALID_REQUEST'], ['UNKNOWN_ERROR']];
     }
 
-    public function test_search_returns_empty_for_zero_results()
+    public function test_search_throws_for_zero_results_so_the_controller_can_fall_back()
     {
         Http::fake(['*' => Http::response(['status' => 'ZERO_RESULTS', 'predictions' => []])]);
 
-        $this->assertSame([], (new GooglePlaces('test-key'))->search('qwertyuiop'));
+        $this->expectException(RuntimeException::class);
+
+        (new GooglePlaces('test-key'))->search('qwertyuiop');
     }
 
     public function test_search_throws_on_a_transport_failure()
@@ -53,6 +55,19 @@ class GooglePlacesTest extends TestCase
         $this->expectException(RuntimeException::class);
 
         (new GooglePlaces('test-key'))->search('farmacia');
+    }
+
+    public function test_transport_exception_does_not_expose_the_api_key()
+    {
+        Http::fake(fn () => throw new RuntimeException('Failed URL https://google.test/?key=super-secret-key'));
+
+        try {
+            (new GooglePlaces('super-secret-key'))->search('farmacia');
+            $this->fail('Expected transport failure.');
+        } catch (RuntimeException $exception) {
+            $this->assertStringNotContainsString('super-secret-key', $exception->getMessage());
+            $this->assertNull($exception->getPrevious());
+        }
     }
 
     public function test_details_resolves_coordinates()

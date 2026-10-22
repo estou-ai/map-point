@@ -35,6 +35,21 @@ class GeocodeControllerTest extends TestCase
             ->assertJsonPath('results.0.place_id', 'abc');
     }
 
+    public function test_search_falls_back_to_nominatim_for_zero_results()
+    {
+        config(['map-point.google_api_key' => 'test-key']);
+        Http::fake([
+            '*googleapis*' => Http::response(['status' => 'ZERO_RESULTS', 'predictions' => []]),
+            '*nominatim*' => Http::response([['display_name' => 'Rua X', 'lat' => '38.7', 'lon' => '-9.1']]),
+        ]);
+
+        $this->actingAs($this->userWithCpAccess())
+            ->get(cp_route('map-point.search', ['q' => 'farmacia', 'provider' => 'google']))
+            ->assertOk()
+            ->assertJsonPath('fallback', true)
+            ->assertJsonPath('results.0.lat', 38.7);
+    }
+
     public function test_search_falls_back_to_nominatim_when_google_fails()
     {
         config(['map-point.google_api_key' => 'test-key']);
