@@ -1,5 +1,7 @@
 import GeoPoint from './components/GeoPoint.vue';
 
 Statamic.booting(() => {
-    Statamic.component('geo-point-fieldtype', GeoPoint);
+    // Must match the fieldtype handle verbatim: the CP resolves a field's
+    // component as `${config.type}-fieldtype` and never converts underscores.
+    Statamic.component('geo_point-fieldtype', GeoPoint);
 });
