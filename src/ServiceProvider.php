@@ -12,6 +12,10 @@ class ServiceProvider extends AddonServiceProvider
         GeoPoint::class,
     ];
 
+    protected $routes = [
+        'cp' => __DIR__.'/../routes/cp.php',
+    ];
+
     protected $vite = [
         'input' => ['resources/js/cp.js'],
     ];
