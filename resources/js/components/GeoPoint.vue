@@ -1,13 +1,23 @@
 <script setup>
-import { computed, onBeforeUnmount, onMounted, ref, shallowRef, watch } from 'vue';
+import { computed, getCurrentInstance, onBeforeUnmount, onMounted, ref, shallowRef, watch } from 'vue';
 import { Fieldtype } from '@statamic/cms';
 import { Button, Input } from '@statamic/cms/ui';
 import L from 'leaflet';
+import markerIcon from 'leaflet/dist/images/marker-icon.png';
+import markerIcon2x from 'leaflet/dist/images/marker-icon-2x.png';
+import markerShadow from 'leaflet/dist/images/marker-shadow.png';
 import 'leaflet/dist/leaflet.css';
+
+L.Icon.Default.mergeOptions({
+    iconUrl: markerIcon,
+    iconRetinaUrl: markerIcon2x,
+    shadowUrl: markerShadow,
+});
 
 const emit = defineEmits(Fieldtype.emits);
 const props = defineProps(Fieldtype.props);
 const { expose, update, isReadOnly } = Fieldtype.use(emit, props);
+const axios = getCurrentInstance().appContext.config.globalProperties.$axios;
 defineExpose(expose);
 
 const mode = computed(() => props.config.mode ?? 'leaflet_map');
@@ -20,7 +30,7 @@ const query = ref('');
 const results = ref([]);
 const searching = ref(false);
 const message = ref(null);
-const fellBack = ref(false);
+const fellBack = ref(provider.value === 'google' && !props.meta.google_available);
 
 // 0 is a valid coordinate, so every "is there a value?" check tests for a
 // finite number rather than truthiness.
@@ -77,12 +87,15 @@ function commitManualInputs() {
 // --- search -----------------------------------------------------------
 
 let searchTimer = null;
+let requestToken = 0;
 
 function onQueryInput() {
     clearTimeout(searchTimer);
+    requestToken++;
 
     if (query.value.trim() === '') {
         results.value = [];
+        searching.value = false;
 
         return;
     }
@@ -91,24 +104,30 @@ function onQueryInput() {
 }
 
 async function runSearch() {
+    const token = ++requestToken;
+    const searchQuery = query.value;
     searching.value = true;
     message.value = null;
 
     try {
-        const response = await Statamic.$axios.get(cpUrl('search'), {
-            params: { q: query.value, provider: provider.value },
+        const response = await axios.get(cpUrl('search'), {
+            params: { q: searchQuery, provider: provider.value },
         });
+
+        if (token !== requestToken) return;
 
         results.value = response.data.results ?? [];
         fellBack.value = !!response.data.fallback;
 
         if (results.value.length === 0) message.value = __('No results found.');
     } catch (e) {
+        if (token !== requestToken) return;
+
         results.value = [];
         // Leave the map untouched — a failed search is not a reason to move it.
         message.value = __('Search failed. You can still set the coordinates by hand.');
     } finally {
-        searching.value = false;
+        if (token === requestToken) searching.value = false;
     }
 }
 
@@ -130,7 +149,7 @@ async function choose(result) {
     }
 
     try {
-        const response = await Statamic.$axios.get(cpUrl('details'), {
+        const response = await axios.get(cpUrl('details'), {
             params: { place_id: result.place_id },
         });
 
@@ -178,6 +197,7 @@ onMounted(() => {
 // leaked map instance keeps running.
 onBeforeUnmount(() => {
     clearTimeout(searchTimer);
+    requestToken++;
     map.value?.remove();
     map.value = null;
 });
@@ -228,16 +248,17 @@ function removeMarker() {
                 v-if="results.length"
                 class="absolute z-10 mt-1 w-full max-h-64 overflow-auto rounded-md border bg-white shadow-lg dark:bg-gray-800"
             >
-                <li
-                    v-for="(result, index) in results"
-                    :key="result.place_id ?? index"
-                    class="cursor-pointer px-3 py-2 text-sm hover:bg-gray-100 dark:hover:bg-gray-700"
-                    @click="choose(result)"
-                >
-                    <div class="font-medium">{{ result.name }}</div>
-                    <div v-if="result.formatted_address" class="text-xs text-gray-500">
-                        {{ result.formatted_address }}
-                    </div>
+                <li v-for="(result, index) in results" :key="result.place_id ?? index">
+                    <button
+                        type="button"
+                        class="block w-full cursor-pointer px-3 py-2 text-left text-sm hover:bg-gray-100 focus:bg-gray-100 focus:outline-none dark:hover:bg-gray-700 dark:focus:bg-gray-700"
+                        @click="choose(result)"
+                    >
+                        <span class="block font-medium">{{ result.name }}</span>
+                        <span v-if="result.formatted_address" class="block text-xs text-gray-500">
+                            {{ result.formatted_address }}
+                        </span>
+                    </button>
                 </li>
             </ul>
         </div>
@@ -251,11 +272,11 @@ function removeMarker() {
             {{ __('Click the map to place the pin.') }}
         </p>
 
-        <div v-show="showsMap" ref="mapEl" class="h-80 w-full rounded-md border"></div>
+        <div v-show="showsMap" ref="mapEl" class="map-point-map w-full rounded-md border"></div>
 
         <!-- The manual inputs are what keep this field usable when tiles fail
              to load, so they are never disabled on a tile error. -->
-        <div class="flex items-end gap-2">
+        <div v-if="showsMap" class="flex items-end gap-2">
             <div class="flex-1">
                 <label class="text-xs text-gray-500">{{ __('Latitude') }}</label>
                 <Input v-model="latInput" :disabled="isReadOnly" type="number" step="any" @change="commitManualInputs" />
@@ -268,3 +289,9 @@ function removeMarker() {
         </div>
     </div>
 </template>
+
+<style scoped>
+.map-point-map {
+    height: 20rem;
+}
+</style>

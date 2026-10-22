@@ -57,8 +57,11 @@ class GooglePlaces implements Geocoder
     {
         try {
             $response = Http::timeout(5)->get($url, $query);
-        } catch (\Throwable $e) {
-            throw new RuntimeException('Google request failed: '.$e->getMessage(), previous: $e);
+        } catch (\Throwable) {
+            // Transport exception messages can contain the full request URI,
+            // including the API key. Keep credentials out of exception chains
+            // because the controller reports this exception to application logs.
+            throw new RuntimeException('Google request failed.');
         }
 
         if ($response->failed()) {
@@ -68,7 +71,7 @@ class GooglePlaces implements Geocoder
         $data = $response->json() ?? [];
         $status = $data['status'] ?? 'UNKNOWN_ERROR';
 
-        if (! in_array($status, ['OK', 'ZERO_RESULTS'], true)) {
+        if ($status !== 'OK') {
             throw new RuntimeException('Google returned status '.$status);
         }
 
