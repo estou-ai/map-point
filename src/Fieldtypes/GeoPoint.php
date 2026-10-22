@@ -10,6 +10,75 @@ class GeoPoint extends Fieldtype
 
     protected $keywords = ['map', 'location', 'coordinates', 'latitude', 'longitude', 'geo'];
 
+    protected function configFieldItems(): array
+    {
+        return [
+            [
+                'display' => __('Input Behavior'),
+                'fields' => [
+                    'mode' => [
+                        'display' => __('Mode'),
+                        'instructions' => __('How the editor picks a location. The Google modes need GOOGLE_MAPS_API_KEY set, and fall back to OpenStreetMap search without it.'),
+                        'type' => 'select',
+                        'default' => 'leaflet_map',
+                        'options' => [
+                            'google_poi' => __('Google place search'),
+                            'google_map' => __('Map picker, Google search'),
+                            'leaflet_map' => __('Map picker, OpenStreetMap search'),
+                        ],
+                    ],
+                    'default_latitude' => [
+                        'display' => __('Default latitude'),
+                        'instructions' => __('Where the map opens when the field is empty.'),
+                        'type' => 'float',
+                        'default' => 39.5,
+                        'width' => 50,
+                    ],
+                    'default_longitude' => [
+                        'display' => __('Default longitude'),
+                        'type' => 'float',
+                        'default' => -8.0,
+                        'width' => 50,
+                    ],
+                    'default_zoom' => [
+                        'display' => __('Default zoom'),
+                        'type' => 'integer',
+                        'default' => 6,
+                        'width' => 50,
+                    ],
+                ],
+            ],
+            [
+                'display' => __('Appearance'),
+                'fields' => [
+                    'tile_url' => [
+                        'display' => __('Tile URL'),
+                        'instructions' => __('Leave empty to use the addon default (OpenStreetMap).'),
+                        'type' => 'text',
+                        'placeholder' => config('map-point.tile_url'),
+                    ],
+                    'tile_attribution' => [
+                        'display' => __('Tile attribution'),
+                        'type' => 'text',
+                    ],
+                ],
+            ],
+        ];
+    }
+
+    public function preload(): array
+    {
+        return [
+            'tile_url' => $this->config('tile_url') ?: config('map-point.tile_url'),
+            'tile_attribution' => $this->config('tile_attribution') ?: config('map-point.tile_attribution'),
+            'default_latitude' => (float) ($this->config('default_latitude') ?? 39.5),
+            'default_longitude' => (float) ($this->config('default_longitude') ?? -8.0),
+            'default_zoom' => (int) ($this->config('default_zoom') ?? 6),
+            // Whether Google is usable at all — never the key itself.
+            'google_available' => filled(config('map-point.google_api_key')),
+        ];
+    }
+
     public function process($data)
     {
         return $this->normalize($data);
@@ -18,6 +87,15 @@ class GeoPoint extends Fieldtype
     public function preProcess($data)
     {
         return $this->normalize($data);
+    }
+
+    /**
+     * Without this, `required` sees ['lat' => null, 'lng' => null] as a
+     * non-empty array and passes on a field with no pin set.
+     */
+    public function preProcessValidatable($value)
+    {
+        return $this->normalize($value);
     }
 
     public function augment($value)
