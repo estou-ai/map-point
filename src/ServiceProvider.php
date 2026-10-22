@@ -2,11 +2,16 @@
 
 namespace Estouai\MapPoint;
 
+use Estouai\MapPoint\Fieldtypes\GeoPoint;
 use Statamic\Providers\AddonServiceProvider;
 use Statamic\Statamic;
 
 class ServiceProvider extends AddonServiceProvider
 {
+    protected $fieldtypes = [
+        GeoPoint::class,
+    ];
+
     protected $vite = [
         'input' => ['resources/js/cp.js'],
     ];
