@@ -5,15 +5,21 @@ namespace Estouai\MapPoint\Tests\Geocoders;
 use Estouai\MapPoint\Geocoders\GooglePlaces;
 use Estouai\MapPoint\Tests\TestCase;
 use Illuminate\Support\Facades\Http;
-use PHPUnit\Framework\Attributes\DataProvider;
 use RuntimeException;
 
 class GooglePlacesTest extends TestCase
 {
-    public function test_search_maps_predictions_to_rows()
+    public function test_search_maps_suggestions_to_rows()
     {
-        Http::fake(['*' => Http::response(['status' => 'OK', 'predictions' => [
-            ['place_id' => 'abc', 'structured_formatting' => ['main_text' => 'Farmácia X', 'secondary_text' => 'Lisboa']],
+        Http::fake(['*' => Http::response(['suggestions' => [
+            ['placePrediction' => [
+                'placeId' => 'abc',
+                'text' => ['text' => 'Farmácia X, Lisboa'],
+                'structuredFormat' => [
+                    'mainText' => ['text' => 'Farmácia X'],
+                    'secondaryText' => ['text' => 'Lisboa'],
+                ],
+            ]],
         ]])]);
 
         $rows = (new GooglePlaces('test-key'))->search('farmacia');
@@ -24,24 +30,33 @@ class GooglePlacesTest extends TestCase
         $this->assertNull($rows[0]['lat']);
     }
 
-    #[DataProvider('googleErrorStatuses')]
-    public function test_search_throws_on_a_google_error_status(string $status)
+    public function test_search_uses_the_new_places_endpoint_with_a_header_key()
     {
-        Http::fake(['*' => Http::response(['status' => $status])]);
+        Http::fake(['*' => Http::response(['suggestions' => [
+            ['placePrediction' => ['placeId' => 'abc', 'text' => ['text' => 'X']]],
+        ]])]);
+
+        (new GooglePlaces('test-key'))->search('farmacia');
+
+        Http::assertSent(fn ($request) => $request->url() === 'https://places.googleapis.com/v1/places:autocomplete'
+            && $request->method() === 'POST'
+            && $request->hasHeader('X-Goog-Api-Key', 'test-key')
+            && $request->hasHeader('X-Goog-FieldMask')
+            && ! str_contains($request->url(), 'test-key'));
+    }
+
+    public function test_search_throws_on_an_api_error()
+    {
+        Http::fake(['*' => Http::response(['error' => ['status' => 'PERMISSION_DENIED']], 403)]);
 
         $this->expectException(RuntimeException::class);
 
         (new GooglePlaces('test-key'))->search('farmacia');
     }
 
-    public static function googleErrorStatuses(): array
-    {
-        return [['REQUEST_DENIED'], ['OVER_QUERY_LIMIT'], ['INVALID_REQUEST'], ['UNKNOWN_ERROR']];
-    }
-
     public function test_search_throws_for_zero_results_so_the_controller_can_fall_back()
     {
-        Http::fake(['*' => Http::response(['status' => 'ZERO_RESULTS', 'predictions' => []])]);
+        Http::fake(['*' => Http::response([])]);
 
         $this->expectException(RuntimeException::class);
 
@@ -72,11 +87,11 @@ class GooglePlacesTest extends TestCase
 
     public function test_details_resolves_coordinates()
     {
-        Http::fake(['*' => Http::response(['status' => 'OK', 'result' => [
-            'name' => 'Farmácia X',
-            'formatted_address' => 'Rua X, Lisboa',
-            'geometry' => ['location' => ['lat' => 38.7223, 'lng' => -9.1393]],
-        ]])]);
+        Http::fake(['*' => Http::response([
+            'displayName' => ['text' => 'Farmácia X'],
+            'formattedAddress' => 'Rua X, Lisboa',
+            'location' => ['latitude' => 38.7223, 'longitude' => -9.1393],
+        ])]);
 
         $row = (new GooglePlaces('test-key'))->details('abc');
 
@@ -86,9 +101,16 @@ class GooglePlacesTest extends TestCase
         $this->assertSame('Rua X, Lisboa', $row['formatted_address']);
     }
 
-    public function test_details_throws_on_an_error_status()
+    public function test_details_returns_null_without_a_location()
     {
-        Http::fake(['*' => Http::response(['status' => 'REQUEST_DENIED'])]);
+        Http::fake(['*' => Http::response(['displayName' => ['text' => 'Farmácia X']])]);
+
+        $this->assertNull((new GooglePlaces('test-key'))->details('abc'));
+    }
+
+    public function test_details_throws_on_an_api_error()
+    {
+        Http::fake(['*' => Http::response(['error' => ['status' => 'PERMISSION_DENIED']], 403)]);
 
         $this->expectException(RuntimeException::class);
 

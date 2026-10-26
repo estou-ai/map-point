@@ -9,22 +9,31 @@ server-side, through this addon's own authenticated CP routes.
 
 ## Installation
 
-The addon is installed through a path repository:
-
-```json
-{
-    "repositories": [
-        { "type": "path", "url": "addons/estouai/map-point" }
-    ]
-}
-```
-
 ```sh
 composer require estouai/map-point
 php artisan vendor:publish --tag=map-point-config
 ```
 
-Built assets ship committed, so the consuming project does not build the addon.
+Publishing the config is optional — the defaults work. Built assets ship with
+the package, so nothing needs building in the consuming project.
+
+## Third-party services
+
+The field talks to services outside your server. Nothing is optional about
+this, so it is worth stating plainly:
+
+- **Map tiles** load in the editor's browser from
+  `tile.openstreetmap.org` by default. Point `tile_url` at another provider to
+  change that.
+- **Address search** in `leaflet_map` mode — and as the fallback for both
+  Google modes — sends the editor's search text to
+  `nominatim.openstreetmap.org` from your server. Searches run only when the
+  editor presses Enter or the Search button, as [Nominatim's usage
+  policy](https://operations.osmfoundation.org/policies/nominatim/) does not
+  allow autocomplete. High-volume sites should run their own Nominatim
+  instance or use a Google key.
+- **Google place search**, when a key is configured, sends the search text to
+  `places.googleapis.com` from your server.
 
 ## Google API key
 
@@ -38,7 +47,9 @@ The key is read server-side via `config/map-point.php` and never reaches the
 browser. Without it, the Google modes fall back to OpenStreetMap search and
 say so inline — the field keeps working.
 
-The key needs the **Places API** enabled.
+The key needs **Places API (New)** enabled in the Google Cloud project. The
+addon calls `places.googleapis.com/v1`; the legacy Places API is not used and
+can no longer be enabled on new projects.
 
 ## Modes
 
@@ -47,6 +58,9 @@ The key needs the **Places API** enabled.
 | `google_poi` | A search box listing real places; picking one stores its coordinates, name and address | Yes (falls back to OpenStreetMap search) |
 | `google_map` | A map to click, with Google-powered address search | Yes (falls back as above) |
 | `leaflet_map` | A map to click, with OpenStreetMap address search | No |
+
+Google modes search as the editor types; OpenStreetMap search runs on Enter or
+the Search button.
 
 In both map modes the search box only *centres* the map — the editor confirms
 the location with a click. Two numeric inputs below the map always work, so the
@@ -86,6 +100,14 @@ when a Google mode supplied them, and is `null` when no pin is set.
 
 Incomplete, non-numeric, or out-of-range input is stored as `null` rather than
 a half-written value, so a `required` field refuses to save without a pin.
+
+## Support
+
+Community support, best effort: open an issue at
+https://github.com/estouai/map-point/issues, or email support@estou.ai.
+
+See [CHANGELOG.md](CHANGELOG.md) for release notes and
+[THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md) for bundled licences.
 
 ## Development
 

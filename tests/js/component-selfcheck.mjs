@@ -20,6 +20,16 @@ assert.ok(
     'results dropdown must stack above Leaflet panes (z-index 400-1000)',
 );
 assert.match(source, /<li[^>]*v-for=[^>]*>\s*<button/s, 'search results need focusable buttons');
+assert.match(
+    source,
+    /autoSearches = computed\(\(\) => provider\.value === 'google'/,
+    'Nominatim must never autocomplete (usage policy)',
+);
+assert.match(source, /if \(!autoSearches\.value\) return;/, 'typing must not trigger a Nominatim search');
+assert.match(source, /@keydown\.enter\.prevent="onSubmit"/, 'submitting with Enter must run the search');
+assert.match(source, /v-if="!autoSearches"[\s\S]{0,200}__\('Search'\)/, 'manual search needs a visible button');
+assert.match(source, /:for="`\$\{fieldId\}-lat`"/, 'latitude label must point at its input');
+assert.match(source, /:for="`\$\{fieldId\}-lng`"/, 'longitude label must point at its input');
 assert.match(source, /v-if="showsMap"[^>]*class="flex items-end gap-2"/, 'manual coordinates belong to map modes only');
 
 console.log('component self-check passed');

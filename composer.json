@@ -45,5 +45,16 @@
         }
     },
     "minimum-stability": "dev",
-    "prefer-stable": true
+    "prefer-stable": true,
+    "archive": {
+        "exclude": [
+            "/docs",
+            "/tests",
+            "/node_modules",
+            "/phpunit.xml",
+            "/vite.config.js",
+            "/package.json",
+            "/package-lock.json"
+        ]
+    }
 }

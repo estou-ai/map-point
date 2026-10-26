@@ -23,14 +23,18 @@ defineExpose(expose);
 const mode = computed(() => props.config.mode ?? 'leaflet_map');
 const showsMap = computed(() => mode.value !== 'google_poi');
 const provider = computed(() => (mode.value === 'leaflet_map' ? 'nominatim' : 'google'));
-// Nominatim's usage policy caps the request rate; Google's cost does.
-const searchDelay = computed(() => (provider.value === 'nominatim' ? 1000 : 400));
+const searchDelay = 400;
+const fieldId = `map-point-${Math.random().toString(36).slice(2, 9)}`;
 
 const query = ref('');
 const results = ref([]);
 const searching = ref(false);
 const message = ref(null);
 const fellBack = ref(provider.value === 'google' && !props.meta.google_available);
+
+// Nominatim's usage policy forbids autocomplete, so OpenStreetMap search only
+// runs when the editor submits it. Google keeps its typeahead.
+const autoSearches = computed(() => provider.value === 'google' && !fellBack.value);
 
 // 0 is a valid coordinate, so every "is there a value?" check tests for a
 // finite number rather than truthiness.
@@ -100,7 +104,21 @@ function onQueryInput() {
         return;
     }
 
-    searchTimer = setTimeout(runSearch, searchDelay.value);
+    if (!autoSearches.value) return;
+
+    searchTimer = setTimeout(runSearch, searchDelay);
+}
+
+function onSubmit() {
+    clearTimeout(searchTimer);
+
+    if (query.value.trim() === '') {
+        results.value = [];
+
+        return;
+    }
+
+    runSearch();
 }
 
 async function runSearch() {
@@ -237,12 +255,23 @@ function removeMarker() {
 <template>
     <div class="space-y-2">
         <div class="relative">
-            <Input
-                v-model="query"
-                :disabled="isReadOnly"
-                :placeholder="showsMap ? __('Search for an address to centre the map') : __('Search for a place')"
-                @input="onQueryInput"
-            />
+            <div class="flex gap-2">
+                <Input
+                    v-model="query"
+                    class="flex-1"
+                    :disabled="isReadOnly"
+                    :placeholder="showsMap ? __('Search for an address to centre the map') : __('Search for a place')"
+                    @input="onQueryInput"
+                    @keydown.enter.prevent="onSubmit"
+                />
+                <Button
+                    v-if="!autoSearches"
+                    variant="subtle"
+                    :disabled="isReadOnly"
+                    :text="__('Search')"
+                    @click="onSubmit"
+                />
+            </div>
 
             <ul
                 v-if="results.length"
@@ -278,12 +307,26 @@ function removeMarker() {
              to load, so they are never disabled on a tile error. -->
         <div v-if="showsMap" class="flex items-end gap-2">
             <div class="flex-1">
-                <label class="text-xs text-gray-500">{{ __('Latitude') }}</label>
-                <Input v-model="latInput" :disabled="isReadOnly" type="number" step="any" @change="commitManualInputs" />
+                <label :for="`${fieldId}-lat`" class="text-xs text-gray-500">{{ __('Latitude') }}</label>
+                <Input
+                    :id="`${fieldId}-lat`"
+                    v-model="latInput"
+                    :disabled="isReadOnly"
+                    type="number"
+                    step="any"
+                    @change="commitManualInputs"
+                />
             </div>
             <div class="flex-1">
-                <label class="text-xs text-gray-500">{{ __('Longitude') }}</label>
-                <Input v-model="lngInput" :disabled="isReadOnly" type="number" step="any" @change="commitManualInputs" />
+                <label :for="`${fieldId}-lng`" class="text-xs text-gray-500">{{ __('Longitude') }}</label>
+                <Input
+                    :id="`${fieldId}-lng`"
+                    v-model="lngInput"
+                    :disabled="isReadOnly"
+                    type="number"
+                    step="any"
+                    @change="commitManualInputs"
+                />
             </div>
             <Button v-if="!isReadOnly" variant="subtle" :text="__('Clear')" @click="clear" />
         </div>

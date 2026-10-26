@@ -24,8 +24,14 @@ class GeocodeControllerTest extends TestCase
     public function test_search_returns_google_results_when_google_works()
     {
         config(['map-point.google_api_key' => 'test-key']);
-        Http::fake(['*googleapis*' => Http::response(['status' => 'OK', 'predictions' => [
-            ['place_id' => 'abc', 'structured_formatting' => ['main_text' => 'Farmácia X', 'secondary_text' => 'Lisboa']],
+        Http::fake(['*googleapis*' => Http::response(['suggestions' => [
+            ['placePrediction' => [
+                'placeId' => 'abc',
+                'structuredFormat' => [
+                    'mainText' => ['text' => 'Farmácia X'],
+                    'secondaryText' => ['text' => 'Lisboa'],
+                ],
+            ]],
         ]])]);
 
         $this->actingAs($this->userWithCpAccess())
@@ -39,7 +45,7 @@ class GeocodeControllerTest extends TestCase
     {
         config(['map-point.google_api_key' => 'test-key']);
         Http::fake([
-            '*googleapis*' => Http::response(['status' => 'ZERO_RESULTS', 'predictions' => []]),
+            '*googleapis*' => Http::response([]),
             '*nominatim*' => Http::response([['display_name' => 'Rua X', 'lat' => '38.7', 'lon' => '-9.1']]),
         ]);
 
@@ -54,7 +60,7 @@ class GeocodeControllerTest extends TestCase
     {
         config(['map-point.google_api_key' => 'test-key']);
         Http::fake([
-            '*googleapis*' => Http::response(['status' => 'REQUEST_DENIED']),
+            '*googleapis*' => Http::response(['error' => ['status' => 'PERMISSION_DENIED']], 403),
             '*nominatim*' => Http::response([['display_name' => 'Rua X', 'lat' => '38.7', 'lon' => '-9.1']]),
         ]);
 
@@ -120,14 +126,24 @@ class GeocodeControllerTest extends TestCase
         Http::assertNothingSent();
     }
 
+    public function test_search_fails_cleanly_when_nominatim_errors()
+    {
+        config(['map-point.google_api_key' => null]);
+        Http::fake(['*nominatim*' => Http::response('', 429)]);
+
+        $this->actingAs($this->userWithCpAccess())
+            ->getJson(cp_route('map-point.search', ['q' => 'rua x', 'provider' => 'nominatim']))
+            ->assertStatus(503);
+    }
+
     public function test_details_returns_a_resolved_coordinate()
     {
         config(['map-point.google_api_key' => 'test-key']);
-        Http::fake(['*googleapis*' => Http::response(['status' => 'OK', 'result' => [
-            'name' => 'Farmácia X',
-            'formatted_address' => 'Rua X, Lisboa',
-            'geometry' => ['location' => ['lat' => 38.7223, 'lng' => -9.1393]],
-        ]])]);
+        Http::fake(['*googleapis*' => Http::response([
+            'displayName' => ['text' => 'Farmácia X'],
+            'formattedAddress' => 'Rua X, Lisboa',
+            'location' => ['latitude' => 38.7223, 'longitude' => -9.1393],
+        ])]);
 
         $this->actingAs($this->userWithCpAccess())
             ->get(cp_route('map-point.details', ['place_id' => 'abc']))
@@ -147,7 +163,7 @@ class GeocodeControllerTest extends TestCase
     public function test_details_fails_cleanly_when_google_errors()
     {
         config(['map-point.google_api_key' => 'test-key']);
-        Http::fake(['*googleapis*' => Http::response(['status' => 'OVER_QUERY_LIMIT'])]);
+        Http::fake(['*googleapis*' => Http::response(['error' => ['status' => 'RESOURCE_EXHAUSTED']], 429)]);
 
         $this->actingAs($this->userWithCpAccess())
             ->get(cp_route('map-point.details', ['place_id' => 'abc']))

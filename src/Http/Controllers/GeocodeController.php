@@ -34,10 +34,16 @@ class GeocodeController
 
         // Either Google was never asked for, has no key, or just failed. The
         // editor keeps a working search either way.
-        return [
-            'results' => (new Nominatim)->search($query),
-            'fallback' => $wantsGoogle,
-        ];
+        try {
+            return [
+                'results' => (new Nominatim)->search($query),
+                'fallback' => $wantsGoogle,
+            ];
+        } catch (RuntimeException $e) {
+            report($e);
+
+            return response()->json(['message' => __('Address search is unavailable.')], 503);
+        }
     }
 
     public function details(Request $request)

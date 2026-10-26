@@ -5,76 +5,93 @@ namespace Estouai\MapPoint\Geocoders;
 use Illuminate\Support\Facades\Http;
 use RuntimeException;
 
+/**
+ * Places API (New). The legacy place/autocomplete/json and place/details/json
+ * endpoints can no longer be enabled on new Google Cloud projects, so this
+ * talks to places.googleapis.com/v1 instead.
+ */
 class GooglePlaces implements Geocoder
 {
     public function __construct(private readonly string $key) {}
 
     public function search(string $query): array
     {
-        $data = $this->get('https://maps.googleapis.com/maps/api/place/autocomplete/json', [
-            'input' => $query,
-            'key' => $this->key,
-        ]);
+        $data = $this->request(
+            'post',
+            'https://places.googleapis.com/v1/places:autocomplete',
+            'suggestions.placePrediction.placeId,suggestions.placePrediction.text,suggestions.placePrediction.structuredFormat',
+            ['input' => $query],
+        );
 
-        return collect($data['predictions'] ?? [])->map(fn ($prediction) => [
-            'name' => $prediction['structured_formatting']['main_text'] ?? ($prediction['description'] ?? ''),
-            'formatted_address' => $prediction['structured_formatting']['secondary_text'] ?? '',
-            // Autocomplete has no coordinates; details() resolves them.
-            'lat' => null,
-            'lng' => null,
-            'place_id' => $prediction['place_id'] ?? null,
-        ])->all();
+        $rows = collect($data['suggestions'] ?? [])
+            ->pluck('placePrediction')
+            ->filter()
+            ->map(fn ($prediction) => [
+                'name' => $prediction['structuredFormat']['mainText']['text']
+                    ?? ($prediction['text']['text'] ?? ''),
+                'formatted_address' => $prediction['structuredFormat']['secondaryText']['text'] ?? '',
+                'lat' => null,
+                'lng' => null,
+                'place_id' => $prediction['placeId'] ?? null,
+            ])
+            ->values()
+            ->all();
+
+        if ($rows === []) {
+            throw new RuntimeException('Google returned no suggestions.');
+        }
+
+        return $rows;
     }
 
     public function details(string $placeId): ?array
     {
-        $data = $this->get('https://maps.googleapis.com/maps/api/place/details/json', [
-            'place_id' => $placeId,
-            'fields' => 'name,formatted_address,geometry',
-            'key' => $this->key,
-        ]);
+        $data = $this->request(
+            'get',
+            'https://places.googleapis.com/v1/places/'.urlencode($placeId),
+            'displayName,formattedAddress,location',
+        );
 
-        if (! $result = $data['result'] ?? null) {
+        $location = $data['location'] ?? [];
+
+        if (! isset($location['latitude'], $location['longitude'])) {
             return null;
         }
 
-        $location = $result['geometry']['location'] ?? [];
-
         return [
-            'name' => $result['name'] ?? '',
-            'formatted_address' => $result['formatted_address'] ?? '',
-            'lat' => isset($location['lat']) ? (float) $location['lat'] : null,
-            'lng' => isset($location['lng']) ? (float) $location['lng'] : null,
+            'name' => $data['displayName']['text'] ?? '',
+            'formatted_address' => $data['formattedAddress'] ?? '',
+            'lat' => (float) $location['latitude'],
+            'lng' => (float) $location['longitude'],
             'place_id' => $placeId,
         ];
     }
 
-    /**
-     * Google reports its own errors as HTTP 200 with an error `status`, so the
-     * HTTP code alone is not enough to tell success from failure.
-     */
-    private function get(string $url, array $query): array
+    private function request(string $method, string $url, string $fieldMask, array $body = []): array
     {
         try {
-            $response = Http::timeout(5)->get($url, $query);
+            $request = Http::timeout(5)->withHeaders([
+                'X-Goog-Api-Key' => $this->key,
+                'X-Goog-FieldMask' => $fieldMask,
+            ]);
+
+            $response = $method === 'post'
+                ? $request->asJson()->post($url, $body)
+                : $request->get($url);
         } catch (\Throwable) {
-            // Transport exception messages can contain the full request URI,
-            // including the API key. Keep credentials out of exception chains
-            // because the controller reports this exception to application logs.
+            // Never pass the original exception through: its message can carry
+            // the request URL, and with it the API key.
             throw new RuntimeException('Google request failed.');
         }
 
         if ($response->failed()) {
-            throw new RuntimeException('Google returned HTTP '.$response->status());
+            $data = $response->json() ?? [];
+
+            throw new RuntimeException(
+                'Google returned '.($data['error']['status'] ?? 'HTTP '.$response->status())
+            );
         }
 
-        $data = $response->json() ?? [];
-        $status = $data['status'] ?? 'UNKNOWN_ERROR';
-
-        if ($status !== 'OK') {
-            throw new RuntimeException('Google returned status '.$status);
-        }
-
-        return $data;
+        return $response->json() ?? [];
     }
 }
