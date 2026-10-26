@@ -104,7 +104,7 @@ a half-written value, so a `required` field refuses to save without a pin.
 ## Support
 
 Community support, best effort: open an issue at
-https://github.com/estouai/map-point/issues, or email support@estou.ai.
+https://github.com/estou-ai/map-point/issues, or email support@estou.ai.
 
 See [CHANGELOG.md](CHANGELOG.md) for release notes and
 [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md) for bundled licences.
